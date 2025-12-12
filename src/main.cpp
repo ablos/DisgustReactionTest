@@ -189,8 +189,9 @@ void loop()
         if (anyTouch && !touches[currentTouch]) 
         {
             digitalWrite(confirmLedPin, HIGH);
+            digitalWrite(reactionLedPins[currentTouch], LOW);
             Serial.println("wrong");
-            
+
             if (currentTrial == 0)
                 disgustWrong++;
             else
