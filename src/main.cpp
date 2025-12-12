@@ -125,9 +125,9 @@ void loop()
     if (disgustReactionCount + normalReactionCount >= TEST_COUNT) 
     {
         // Calculate averages
-        int normalAverage = calculateAverage(normalReactionTimes);
-        int disgustAverage = calculateAverage(disgustReactionTimes);
-        int totalAverage = (normalAverage + disgustAverage) / 2;
+        unsigned long normalAverage = calculateAverage(normalReactionTimes);
+        unsigned long disgustAverage = calculateAverage(disgustReactionTimes);
+        unsigned long totalAverage = (normalAverage + disgustAverage) / 2;
 
         Serial.println("done");
         
