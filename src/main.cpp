@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-// !! IMPORTANT !! - This number MUST be an even number
+// !! IMPORTANT !! - Test count MUST be a multiple of 4!
 #define TEST_COUNT 12
 #define minSecondsInterval 3
 #define maxSecondsInterval 7
@@ -20,11 +20,12 @@
 #define thresholdPercentage 0.75
 
 int seconds_before_next = 0;
+bool started = false;
 bool awaitingReaction = false;
 unsigned long startWaitTime = 0;
 unsigned long startReactionTime = 0;
 
-int trialSequence[TEST_COUNT]; // 0 = disgust, 1 = normal
+int trialSequence[TEST_COUNT]; // 0 + 1 are normal - 2 + 3 are disgust
 unsigned long disgustReactionTimes[TEST_COUNT / 2];
 unsigned long normalReactionTimes[TEST_COUNT / 2];
 int disgustReactionCount = 0;
@@ -34,7 +35,6 @@ int normalWrong = 0;
 int disgustEarly = 0;
 int normalEarly = 0;
 int trialIndex = 0;
-int currentTouch = 0;
 
 int touchThreshold1 = 75;
 int touchThreshold2 = 75;
@@ -67,10 +67,10 @@ void setup()
     pinMode(confirmLedPin, OUTPUT);
     
     // Set initial states
-    digitalWrite(reactionLedPin1, LOW);
-    digitalWrite(reactionLedPin2, LOW);
-    digitalWrite(reactionLedPin3, LOW);
-    digitalWrite(reactionLedPin4, LOW);
+    digitalWrite(reactionLedPin1, HIGH);
+    digitalWrite(reactionLedPin2, HIGH);
+    digitalWrite(reactionLedPin3, HIGH);
+    digitalWrite(reactionLedPin4, HIGH);
     digitalWrite(confirmLedPin, LOW);
     
     // Calibrate touch sensors
@@ -79,14 +79,13 @@ void setup()
     touchThreshold3 = touchRead(touchPin3) * thresholdPercentage;
     touchThreshold4 = touchRead(touchPin4) * thresholdPercentage;
 
-    // Generate sequence (0 = disgust, 1 = normal)
-    int halfTestCount = TEST_COUNT / 2;
-    
-    // Fill exactly half disgust + half normal
-    for (int i = 0; i < halfTestCount; i++) 
+    // Trail each sensor the same amount of times
+    for (int i = 0; i < TEST_COUNT / 4; i++)
     {
-        trialSequence[i] = 0;                   // disgust
-        trialSequence[i + halfTestCount] = 1;   // normal
+        trialSequence[i * 4 + 0] = 0;      // sensor 1
+        trialSequence[i * 4 + 1] = 1;      // sensor 2  
+        trialSequence[i * 4 + 2] = 2;      // sensor 3
+        trialSequence[i * 4 + 3] = 3;      // sensor 4
     }
     
     // Fisher-Yates shuffle for perfect randomness
@@ -98,8 +97,8 @@ void setup()
         trialSequence[j] = temp;
     }
 
-    Serial.println("begin");
-    resetReaction();
+    Serial.print("ready,");
+    Serial.println(TEST_COUNT);
 }
 
 void loop() 
@@ -118,6 +117,24 @@ void loop()
     bool anyTouch = touch1 || touch2 || touch3 || touch4;
     bool touches[4] = { touch1, touch2, touch3, touch4 };
     
+    // Wait before any touch if not started
+    if (!started) 
+    {
+        if (anyTouch) 
+        {
+            started = true;
+            Serial.println("start");
+            digitalWrite(reactionLedPin1, LOW);
+            digitalWrite(reactionLedPin2, LOW);
+            digitalWrite(reactionLedPin3, LOW);
+            digitalWrite(reactionLedPin4, LOW);
+            delay(3000);
+            resetReaction();
+        }
+
+        return;
+    }
+
     // Get current trial
     int currentTrial = trialSequence[trialIndex];
 
@@ -129,24 +146,21 @@ void loop()
         unsigned long disgustAverage = calculateAverage(disgustReactionTimes);
         unsigned long totalAverage = (normalAverage + disgustAverage) / 2;
 
-        Serial.println("done");
+        Serial.print("end,");
         
         // Print results
-        Serial.print("Normal average: ");
-        Serial.println(normalAverage);
-        Serial.print("Disgust average: ");
-        Serial.println(disgustAverage);
-        Serial.print("Total average: ");
-        Serial.println(totalAverage);
-        Serial.println();
-        Serial.print("Normal early: ");
-        Serial.println(normalEarly);
-        Serial.print("Disgust early: ");
-        Serial.println(disgustEarly);
-        Serial.println();
-        Serial.print("Normal wrong: ");
-        Serial.println(normalWrong);
-        Serial.print("Disgust wrong: ");
+        Serial.print(normalAverage);
+        Serial.print(",");
+        Serial.print(disgustAverage);
+        Serial.print(",");
+        Serial.print(totalAverage);
+        Serial.print(",");
+        Serial.print(normalEarly);
+        Serial.print(",");
+        Serial.print(disgustEarly);
+        Serial.print(",");
+        Serial.print(normalWrong);
+        Serial.print(",");
         Serial.println(disgustWrong);
 
         // Turn of ESP -- Restart test by pressing the reset button (EN)
@@ -162,65 +176,76 @@ void loop()
             digitalWrite(confirmLedPin, HIGH);
             Serial.println("early");
             
-            if (currentTrial == 0)
-                disgustEarly++;
-            else
+            if (currentTrial <= 1)
                 normalEarly++;
+            else
+                disgustEarly++;
 
             resetReaction();
         }
         
-        // If random interval has passed test reaction time
+        // If random interval has passed test reaction time start trial
         else if (millis() - startWaitTime >= seconds_before_next * 1000UL) 
         {
-            // Decide random touch sensor in category (touch 1 & 2 are normal - touch 3 & 4 are disgust)
-            currentTouch = currentTrial == 0 ? random(2, 4) : random(2);
-            digitalWrite(reactionLedPins[currentTouch], HIGH);
+            digitalWrite(reactionLedPins[currentTrial], HIGH);
             awaitingReaction = true;
-            Serial.println("testing");
             startReactionTime = micros();
         }
     }
     
     // Currently testing reaction time
-    else 
+    else if (anyTouch)
     {
-        // Check for wrong input
-        if (anyTouch && !touches[currentTouch]) 
+        // Capture reaction time
+        unsigned long reactionTime = micros() - startReactionTime;
+        digitalWrite(reactionLedPins[currentTrial], LOW);
+        digitalWrite(confirmLedPin, HIGH);
+        
+        Serial.print("test,");
+        Serial.print(trialIndex + 1);
+        Serial.print(currentTrial <= 1 ? ",normal," : ",disgust,");
+
+        // Correct touch
+        if (touches[currentTrial]) 
         {
-            digitalWrite(confirmLedPin, HIGH);
-            digitalWrite(reactionLedPins[currentTouch], LOW);
-            Serial.println("wrong");
+            Serial.print("success,");
 
-            if (currentTrial == 0)
-                disgustWrong++;
-            else
-                normalWrong++;
-
-            resetReaction();
-            return;
-        }
-
-        // Capture reaction time on touch and reset
-        if (touches[currentTouch]) 
-        {
-            unsigned long reactionTime = micros() - startReactionTime;
-            digitalWrite(reactionLedPins[currentTouch], LOW);
-            digitalWrite(confirmLedPin, HIGH);
-            Serial.println("success");
-            Serial.println(reactionTime);
-
-            // 0 = disgust - 1 = normal
-            if (currentTrial == 0) 
-                disgustReactionTimes[disgustReactionCount++] = reactionTime;
-            else
+            // 0 + 1 are normal - 2 + 3 are disgust
+            if (currentTrial <= 1) 
                 normalReactionTimes[normalReactionCount++] = reactionTime;
+            else
+                disgustReactionTimes[disgustReactionCount++] = reactionTime;
 
             // Move to next trial
             trialIndex++;
-
-            resetReaction();
         }
+        
+        // Wrong touch
+        else
+        {
+            Serial.print("wrong,");
+
+            if (currentTrial <= 1)
+                normalWrong++;
+            else
+                disgustWrong++;
+                
+            // Reshuffle remaining trials
+            int remaining = TEST_COUNT - trialIndex;
+            if (remaining > 1)
+            {
+                for (int i = trialIndex; i < TEST_COUNT - 1; i++) 
+                {
+                    int j = random(i, TEST_COUNT);
+                    int temp = trialSequence[i];
+                    trialSequence[i] = trialSequence[j];
+                    trialSequence[j] = temp;
+                }
+            }
+        }
+
+        Serial.println(reactionTime);
+        resetReaction();
     }
 }
 
@@ -230,7 +255,6 @@ void resetReaction()
     digitalWrite(confirmLedPin, LOW);
     seconds_before_next = random(minSecondsInterval, maxSecondsInterval);
     awaitingReaction = false;
-    Serial.println("reset");
     startWaitTime = millis();
 }
 
