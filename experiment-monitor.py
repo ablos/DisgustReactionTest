@@ -48,6 +48,8 @@ try:
             if parts[0] == "ready":
                 print()
                 print(f"Test ready for {parts[1]} trials!")
+                trial_data = []
+                final_results = None
                 
             elif parts[0] == "start":
                 print()
