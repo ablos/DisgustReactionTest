@@ -2,8 +2,8 @@
 
 // !! IMPORTANT !! - Test count MUST be a multiple of 4!
 #define TEST_COUNT 12
-#define minSecondsInterval 3
-#define maxSecondsInterval 7
+#define minSecondsInterval 1
+#define maxSecondsInterval 3
 
 // Touch 1 & 2 are normal
 // Touch 3 & 4 are disgust
@@ -17,7 +17,7 @@
 #define reactionLedPin4 19
 
 #define confirmLedPin 2
-#define thresholdPercentage 0.75
+#define thresholdPercentage 0.85
 
 int seconds_before_next = 0;
 bool started = false;
