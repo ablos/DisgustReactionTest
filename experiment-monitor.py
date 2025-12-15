@@ -5,14 +5,14 @@ from datetime import datetime
 import sounddevice as sd
 import soundfile as sf
 import threading
+import os
 
 # Load all sounds at startup
-countdown_data, countdown_sr = sf.read('countdown.wav')
 sounds = {
-    'countdown': sf.read('countdown.wav'),
-    'final_result': sf.read('final_result.wav'),
-    'wrong': sf.read('wrong.wav'),
-    'success': sf.read('success.wav')
+    'countdown': sf.read('sounds/countdown.wav'),
+    'final_result': sf.read('sounds/final_result.wav'),
+    'wrong': sf.read('sounds/wrong.wav'),
+    'success': sf.read('sounds/success.wav')
 }
 
 def play_sound(name):
@@ -87,20 +87,25 @@ try:
                 if save.lower() == 'y':
                     participant_id = input("Enter participant ID: ")
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    
+
+                    # Create results folder if it doesn't exist
+                    os.makedirs("results", exist_ok=True)
+
                     # Save trial data
-                    with open(f"{participant_id}_{timestamp}_trials.csv", 'w', newline='') as f:
+                    trials_file = f"results/{participant_id}_{timestamp}_trials.csv"
+                    with open(trials_file, 'w', newline='') as f:
                         writer = csv.DictWriter(f, fieldnames=['trial', 'condition', 'result', 'reaction_time'])
                         writer.writeheader()
                         writer.writerows(trial_data)
-                    
+
                     # Save summary
-                    with open(f"{participant_id}_{timestamp}_summary.csv", 'w', newline='') as f:
+                    summary_file = f"results/{participant_id}_{timestamp}_summary.csv"
+                    with open(summary_file, 'w', newline='') as f:
                         writer = csv.DictWriter(f, fieldnames=final_results.keys())
                         writer.writeheader()
                         writer.writerow(final_results)
-                    
-                    print(f"\nSaved to {participant_id}_{timestamp}_trials.csv and {participant_id}_{timestamp}_summary.csv")
+
+                    print(f"\nSaved to {trials_file} and {summary_file}")
                         
                 # Clear data for next test
                 trial_data = []
